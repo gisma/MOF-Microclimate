@@ -1,0 +1,82 @@
+---
+title: "aktueller Stand"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+---
+
+```{r warning=FALSE, include=FALSE}
+# Setup
+
+root_folder = "D:/Uni_Marburg/Arbeit"
+source(file.path(root_folder, "/MicroclimateMOF/src/000_setup.R"))
+
+trainDF <- readRDS(file.path(envrmt$path_auxdata, "trainDFmcScaled.rds"))
+trainSites <- read_sf(file.path(envrmt$path_auxdata, "core_study_trees.shp"))
+```
+
+# Allgemein
+
+Modell der Temperatur im Uniwald mit stündlicher Auflösung und 1 meter räumlicher Auflösung. Basierend auf Messungen auf der Klimastation auf der zentral im Wald gelegenen Grubenwiese, sowie Lidar Daten.
+
+Alternative: nächstgelegene DWD Wetterstation (Cölbe) und Einbezug von Sentineldaten für Strahlung und Bewölkung.
+
+# TrainDF
+
+Die target variable ist "temp", also die von den daten loggern gemessene Temperatur. "rel_humidity" könnte eine weitere target variable werden. "cst_id" beschreibt die Baum ID der Datenlogger.
+Die restlichen Variablen sind die potentiellen Prädiktoren. 
+Räumlich dynamische Variablen sind:
+  - dtm
+  - slope
+  - aspect
+  - TPI
+  - CHM
+  - ip_ground
+  - cluster
+  
+Zeitlich dynamische Variablen sind:
+  - doy (day of the year)
+  - hour
+  - day (day or night)
+  - Messungen der Klimastation auf der Grubenwiese: Ta_10, Huma_10, rad_sw und rad_lw, Windspeed, Wind direction, rad_Klimastation
+  - cloudiness (berechnet aus Differenz von gemessener und berechneter Einstrahlung bei der Klimastation)
+  
+  
+Zeitlich und räumliche dynamische Variable:
+  - rad (berechnet mit GRASS)
+  
+
+```{r}
+colnames(trainDF)
+```
+```{r}
+trainDF
+```
+
+## Random Forest Model
+
+Wurde trainiert mit mtry = 5 und ntree = 600 und ausgewählten Features. Für die Cross Validation wurden die Koordinaten der tree logger standorte mit einem kmeans algorithmus geclustert um so eine größere räumliche Unabhängigkeit herzustellen. 
+
+```{r}
+rf_final = readRDS(file.path(envrmt$path_model,"rf/rf_4_final.rds"))
+print(rf_final)
+```
+
+
+```{r}
+print(rf_final$finalModel$xNames)
+```
+```{r}
+varImp(rf_final)
+```
+
+```{r fig.height=10, fig.width=10}
+rf_pred = stack(file.path(envrmt$path_model, "rf/rf_predictions.tif"))
+names(rf_pred) = c("221-13", "270-17", "263-05", "223-04")
+
+pal <- colorRampPalette(c("darkblue", "deepskyblue","yellow", "orange", "red"))(40)
+
+plot(rf_pred, col = pal, horizontal = TRUE)
+```
+
