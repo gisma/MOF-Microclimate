@@ -1,3 +1,3 @@
 
-![](docs/humid.png)
+![](images/humid.png)
 
