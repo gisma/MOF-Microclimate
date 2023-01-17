@@ -22,7 +22,9 @@ appendProjectDirList =  c("data/lidar/",
                           "data/lidar/MOF_lidar_2018/lidar_ctg/",
                           "data/lidar/lidar_orig/",
                           "data/lidar/MOF_lidar_2018/lidar_norm/",
-                          "data/lidar/MOF_lidar_2018/lidar_vector/")
+                          "data/lidar/MOF_lidar_2018/lidar_vector/",
+                          "data/lidar/l_raster",
+                          "data/lidar/l_raw","data/lidar/l_norm")
 
 source(file.path(root_folder,"src/000-rspatial-setup.R"),echo = TRUE)
 
@@ -38,26 +40,24 @@ demFN = paste0(envrmt$path_lidar_raster,"rasterize_terrain.vrt")
 chmFN = paste0(envrmt$path_lidar_raster,"rasterize_canopy.vrt")
 treesFN = paste0(envrmt$path_lidar_vector,"segmentation_sapflow.shp")
 sapflow_metricsFN = paste0(envrmt$path_lidar_raster,"segmentation_sapflow.tif")
-las_fileFN = paste0(envrmt$path_lidar_orig,"MOF_lidar_2018.las")
+las_fileFN = paste0(envrmt$path_l_raw,"/l1.las")
 
-
-
-# resolution in meter
-res = 2.0
-
-#- parallelisation in this case 8 Cores
-future::plan(multisession, workers = 12)
-set_lidr_threads(12)
 
 #------------------------------------------------------------------------------
 # 1 - start processing
 #-----------------------------
 if (calculate){
+  
   #---- define lidR catalog ----
+  # resolution in meter
+  res = 1.
+  #- parallelisation in this case 8 Cores
+  future::plan(multisession, workers = 8)
+  set_lidr_threads(8)
   #- general catalog settings
   ctg <- lidR::readLAScatalog(las_fileFN)
-  projection(ctg) <- 25832
-  lidR::opt_chunk_size(ctg) = 750
+  projection(ctg) <- 32632
+  lidR::opt_chunk_size(ctg) = 650
   lidR::opt_chunk_buffer(ctg) <- 25
   lidR::opt_progress(ctg) <- TRUE
   lidR::opt_laz_compression(ctg) <- TRUE
@@ -66,29 +66,34 @@ if (calculate){
   ctg@output_options$drivers$SpatVector$param$overwrite <- TRUE
   ctg@output_options$drivers$stars$param$overwrite <- TRUE
   ctg@output_options$drivers$sf$param$overwrite <- TRUE
-  #---- height normalisation (point cloud) ----
+  lidR::opt_output_files(ctg) <- paste0(envrmt$path_lidar_raster,"ground/{ID}","_ground")
+  #ctg = classify_ground(ctg, algorithm =  mcc(.9,0.2))
+  ctg = classify_ground(ctg, algorithm = csf(TRUE, 3, 0.25))
+  # ---- dem ----
+  #lidR::opt_output_files(ctg) <- paste0(envrmt$path_lidar_raster,"ground/{ID}","_ground")
+  lidR::opt_output_files(ctg) <- paste0(envrmt$path_lidar_raster,"ground/{ID}","_terrain")
+dem <- rasterize_terrain(ctg, res = res,lidR::kriging( k = 20L))
+    plot(dem)
+  # ---- normalize height (point cloud) ----
   # source: https://github.com/Jean-Romain/lidR/wiki/Rasterizing-perfect-canopy-height-models
-  # first derive dem
-  lidR::opt_output_files(ctg) <- paste0(envrmt$path_lidar_raster,"dem/{ID}","_dem")
-  dem <- rasterize_terrain(ctg, res = res,lidR::knnidw(k = 6L, p = 2))
-  
-  #- second normalize height (point cloud)
   lidR::opt_output_files(ctg) <- paste0(envrmt$path_lidar_norm,"{ID}","_norm_height")
-  ctg <- lidR::normalize_height(ctg,lidR::knnidw())
-  
-  #- calculate chm
+  ctg <- lidR::normalize_height(ctg,lidR::kriging( k = 40L))
+  # ---- calculate chm ----
   lidR::opt_output_files(ctg) = paste0(envrmt$path_lidar_raster,"chm/{ID}","_chm")
-  chm = rasterize_canopy(ctg, res = res, lidR::dsmtin())
+  chm = rasterize_canopy(ctg, res = res, lidR::kriging( k = 40L))
+  #chm_tif = get_vrt_img("grid_canopy",paste0(envrmt$path_lidar_raster,"chm/"),"chm")
+  
+  # ---- filter chm for less tree tops and retrieve potential ----
   ker <- matrix(1,3,3)
   cchm <- raster::focal(chm, w = ker, fun = min, na.rm = TRUE)
-  #chm_tif = get_vrt_img("grid_canopy",paste0(envrmt$path_lidar_raster,"chm/"),"chm")
   ttops_chm = locate_trees(cchm, lmf(8))
+  # ---- define different segmentations approaches ----
   algo1 = li2012(hmin = 5, R = 5)
   algo2 = lidR::dalponte2016(cchm,treetops = ttops_chm,th_tree = 5)
   algo3 = silva2016(chm, ttops_chm,exclusion = 0.5)
   
   
-  #--- tree segmentation based on the point cloud using catalog
+  #---- tree segmentation based on the point cloud using catalog ----
   # source: https://gis.stackexchange.com/questions/364546/individual-tree-segmentation-workflow-with-lidr-package
   #- tree segmentation using the 99 percentile filter
   opt_output_files(ctg) = paste0(envrmt$path_lidar_ctg,"hull_algo1/HULL_{XCENTER}_{YCENTER}")
@@ -130,3 +135,4 @@ if (calculate){
   trees = st_read(treesFN)
   sapflow_metrics = raster::stack(sapflow_metricsFN)
 }
+

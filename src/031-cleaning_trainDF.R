@@ -18,10 +18,10 @@ require(rprojroot)
 root_folder = find_rstudio_root_file()
 
 # define  additional packages comment if not needed
-appendpackagesToLoad = c("lidR","future","lwgeom","tmap","ggplot2","VIM","Hmisc","mice")
+appendpackagesToLoad = c("ggplot2","VIM","Hmisc","mice","lubridate")
 
 # define additional subfolders comment if not needed
-tmpPath = paste0("data/lidar/",prefix,"/") 
+
 appendProjectDirList =  c("data/lidar/",
                           "data/GRASS/",
                           "data/lidar/MOF_lidar_2018/lidar_raster/",

@@ -18,8 +18,8 @@ require(envimaR)
 devtools::install_github("akamoske/canopyLazR")
 
 # rspatial packages
-packagesToLoad = c("mapview", "mapedit", "tmap", "raster", "terra", "stars", "gdalcubes", "sf","dplyr","tidyverse","RStoolbox",
-                   "randomForest", "ranger", "e1071", "caret", "link2GI","rgrass7","doParallel","foreach")
+packagesToLoad = c("mapview", "tmap", "raster", "terra", "stars", "sf","dplyr","RStoolbox",
+                   "randomForest", "e1071", "caret", "doParallel","foreach")
 
 
 # mandantory folder structure

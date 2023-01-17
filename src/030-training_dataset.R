@@ -16,6 +16,7 @@
 # ----project setup----
 require(envimaR)
 require(rprojroot)
+
 root_folder = find_rstudio_root_file()
 
 # define  additional packages comment if not needed
